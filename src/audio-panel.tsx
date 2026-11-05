@@ -1,0 +1,9 @@
+import { Pause, Play, RotateCcw, VolumeX, X } from 'lucide-react';
+import { pauseChant, playChantFromGesture, retryChantFromGesture, useAudioStatus, type AudioPreferences } from './audio-engine';
+export function AudioPanel({ value, onChange, onClose }: { value: AudioPreferences; onChange: (patch: Partial<AudioPreferences>) => void; onClose: () => void }) {
+ const state = useAudioStatus();
+ return <aside className="audio-panel" aria-label="Âm thanh"><div className="panel-heading"><h2>Âm thanh</h2><button aria-label="Đóng âm thanh" onClick={onClose}><X size={18}/></button></div>
+ <p role="status" className={`audio-status ${state.status}`}>{state.message}</p>{state.title&&<small>{state.kind==='music'?'Nhạc nền':'Kinh tiếng Phạn'} · {state.title}</small>}
+ <div className="audio-actions"><button onClick={()=>{if(state.status==='playing'||state.status==='waiting')pauseChant();else {if(!value.sound)onChange({sound:true});playChantFromGesture();}}} disabled={state.status==='missing'}>{state.status==='playing'?<Pause size={16}/>:<Play size={16}/>} {state.status==='playing'?'Tạm dừng':state.kind==='music'?'Phát nhạc':'Phát kinh'}</button>{['error','blocked','missing'].includes(state.status)&&<button onClick={retryChantFromGesture}><RotateCcw size={14}/> Thử lại</button>}<button aria-pressed={!value.sound} onClick={()=>onChange({sound:!value.sound})}><VolumeX size={16}/>{value.sound?'Tắt toàn bộ':'Bật âm thanh'}</button></div>
+ <div className="audio-sliders">{[['chantVolume',state.kind==='music'?'Nhạc nền':'Kinh'],['environmentVolume','Môi trường'],['effectsVolume','Hiệu ứng']].map(([key,name])=><label key={key}>{name} · {Math.round((value[key as keyof AudioPreferences] as number)*100)}%<input aria-label={`Âm lượng ${name.toLowerCase()}`} type="range" min="0" max="1" step=".05" value={value[key as keyof AudioPreferences] as number} onChange={e=>onChange({[key]:Number(e.target.value)})}/></label>)}</div></aside>;
+}

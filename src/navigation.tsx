@@ -1,0 +1,10 @@
+import { useEffect, useRef, useState } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { Html } from '@react-three/drei';
+import { Compass, X } from 'lucide-react';
+import * as THREE from 'three';
+import { groundHeight } from './world-data';
+import type { Destination } from './npc-data';
+import { useLabelOccluders } from './scene-label';
+export function DestinationMarker({target,quality}:{target:Destination;quality:string}){const ref=useRef<THREE.Group>(null),occluders=useLabelOccluders(quality);useFrame(({clock})=>{if(ref.current)ref.current.position.y=.18+Math.sin(clock.elapsedTime*2)*.05;});return <group position={[target.x,groundHeight(target.x,target.z)+.025,target.z]}><mesh rotation={[-Math.PI/2,0,0]}><torusGeometry args={[.38,.018,6,40]}/><meshStandardMaterial color="#b69a5f" emissive="#8e7040" emissiveIntensity={.3} roughness={.75}/></mesh><group ref={ref}><mesh position={[0,.22,0]} rotation={[0,0,Math.PI]}><coneGeometry args={[.1,.18,8]}/><meshStandardMaterial color="#ad8b4e" roughness={.6}/></mesh></group><Html center position={[0,.8,0]} occlude={occluders} zIndexRange={[2,0]} style={{pointerEvents:'none'}}><span className="destination-label">{target.label}</span></Html></group>;}
+export function NavigationHud({target,player,onClose}:{target:Destination;player:React.RefObject<THREE.Vector3>;onClose:()=>void}){const [distance,setDistance]=useState(()=>Math.hypot(player.current.x-target.x,player.current.z-target.z));useEffect(()=>{const update=()=>setDistance(Math.hypot(player.current.x-target.x,player.current.z-target.z));update();const timer=setInterval(update,300);return()=>clearInterval(timer);},[target,player]);return <aside className="navigation-hud" aria-label="Chỉ đường"><Compass size={19}/><div><small>{distance<1.3?'Đã đến gần điểm đích':'Điểm đến'}</small><strong>{target.label}</strong><span>{distance.toFixed(1)} m · Tự di chuyển tới dấu vàng</span></div><button aria-label="Hủy chỉ đường" onClick={onClose}><X size={16}/></button></aside>;}

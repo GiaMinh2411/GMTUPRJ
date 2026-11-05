@@ -1,0 +1,48 @@
+import { test, expect } from '@playwright/test';
+
+for (const mobile of [false, true]) test(`MP3 người dùng: phát thật và giữ player trên ${mobile ? 'điện thoại' : 'máy tính'}`, async ({ browser }) => {
+  const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 720 }, isMobile: mobile, hasTouch: mobile });
+  const page = await context.newPage(), errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.addInitScript(mobile => {
+    localStorage.setItem('an-nhien-v1', JSON.stringify({ quality: 'low', sound: false, chantVolume: mobile ? .35 : 0, name: 'An Nhiên', gender: 'male', onboardingCompleted: true }));
+    const Original = window.Audio; let count = 0;
+    Object.defineProperty(window, '__audioCount', { get: () => count });
+    window.Audio = class extends Original { constructor(src?: string) { super(src); count++; (window as unknown as { __media: HTMLAudioElement }).__media = this; } };
+  }, mobile);
+  const config = page.waitForResponse('**/audio/chant.json'); await page.goto('/'); await config;
+  expect(await page.evaluate(() => (window as unknown as { __audioCount: number }).__audioCount)).toBe(0);
+  const file = page.waitForResponse(response => response.url().endsWith('/audio/thien-tinh-tam-remix.mp3') && [200, 206].includes(response.status()));
+  await page.getByRole('button', { name: 'Vào chùa', exact: true }).click();
+  const response = await file; expect(response.headers()['content-type']).toContain('audio/mpeg');
+  await expect(page.getByRole('button', { name: 'Nhạc nền: Đang phát', exact: true })).toBeVisible();
+  const entryPreferences = await page.evaluate(() => JSON.parse(localStorage.getItem('an-nhien-v1')!));
+  expect(entryPreferences.sound).toBe(true); expect(entryPreferences.chantVolume).toBe(mobile ? .35 : .5);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __media: HTMLAudioElement }).__media.currentTime)).toBeGreaterThan(.5);
+  const media = await page.evaluate(() => { const audio = (window as unknown as { __media: HTMLAudioElement }).__media; return { duration: audio.duration, loop: audio.loop, error: audio.error, src: audio.currentSrc }; });
+  expect(media.duration).toBeGreaterThan(30); expect(media.loop).toBe(true); expect(media.error).toBeNull(); expect(media.src).toContain('/audio/thien-tinh-tam-remix.mp3');
+  await page.getByRole('button', { name: 'Nhạc nền: Đang phát', exact: true }).click();
+  await expect(page.locator('.audio-panel')).toContainText('Nhạc nền · Thiền Tịnh Tâm Remix');
+  await page.getByRole('button', { name: 'Bật âm thanh', exact: true }).click();
+  await page.getByRole('button', { name: 'Phát nhạc', exact: true }).click();
+  await expect(page.locator('.audio-status')).toHaveText('Đang phát');
+  const before = await page.evaluate(() => (window as unknown as { __media: HTMLAudioElement }).__media.currentTime);
+  await page.getByRole('button', { name: 'Tràng hạt', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Tiếng hạt', exact: true }).check(); await page.locator('.bead-step').click();
+  await page.getByRole('button', { name: 'Đóng tràng hạt', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __media: HTMLAudioElement }).__media.currentTime)).toBeGreaterThan(before + .2);
+  expect(await page.evaluate(() => (window as unknown as { __audioCount: number }).__audioCount)).toBe(1);
+  await page.getByRole('button', { name: 'Cài đặt', exact: true }).click();
+  await page.getByRole('button', { name: 'Đổi nhân vật', exact: true }).click();
+  await page.getByRole('button', { name: 'Vào chùa', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Nhạc nền: Đang phát', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { __audioCount: number }).__audioCount)).toBe(1);
+  await page.getByRole('button', { name: 'Tạm dừng', exact: true }).click();
+  await expect(page.locator('.audio-status')).toContainText('tạm dừng');
+  await page.getByLabel('Âm lượng nhạc nền', { exact: true }).focus(); await page.keyboard.press('Home');
+  await page.getByRole('button', { name: 'Phát nhạc', exact: true }).click();
+  await expect(page.locator('.audio-status')).toContainText('Âm lượng nhạc nền đang ở 0%');
+  await page.getByLabel('Âm lượng nhạc nền', { exact: true }).focus(); await page.keyboard.press('End');
+  await page.getByRole('button', { name: 'Phát nhạc', exact: true }).click(); await expect(page.locator('.audio-status')).toHaveText('Đang phát');
+  expect(errors).toEqual([]); await context.close();
+});
